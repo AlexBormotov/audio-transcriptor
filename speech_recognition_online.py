@@ -131,11 +131,23 @@ def recognize_and_save(model, wav_path, output_file, stop_state):
         with open(output_file, "w", encoding="utf-8") as f:
             f.write("=== Начало транскрибации ===\n\n")
             f.write(formatted + "\n")
-        # Проверяем наличие слова "стоп" в конце текста
-        if re.search(r'(стоп|stop)[.!?\s]*$', text.lower()):
-            stop_state['stop_time'] = time.time()
+        # Проверяем наличие слова "стоп" или "stop" среди последних 10 слов
+        words = re.findall(r'\w+', text.lower())
+        last_words = words[-10:] if len(words) >= 10 else words
+        found_stop = any(w in ["стоп", "stop"] for w in last_words)
+        # Если найдено слово стоп/stop и текст не меняется — запускаем таймер
+        if found_stop:
+            if stop_state.get('last_text') == text:
+                # Если текст не меняется, увеличиваем время ожидания
+                if stop_state.get('stop_time') is None:
+                    stop_state['stop_time'] = time.time()
+            else:
+                # Если текст изменился, сбрасываем таймер
+                stop_state['stop_time'] = None
+            stop_state['last_text'] = text
         else:
             stop_state['stop_time'] = None
+            stop_state['last_text'] = text
     except Exception as e:
         print(f"\n[ОШИБКА] Не удалось распознать полный WAV: {e}")
 
@@ -218,7 +230,7 @@ def main():
 
     try:
         chunk_counter = 0
-        while True:
+        while not stop_event.is_set():
             chunk_counter += 1
             temp_file = "temp_chunk.wav"
             chunk_frames = record_chunk(p, stream, temp_file)
