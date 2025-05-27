@@ -15,6 +15,8 @@ import numpy as np
 import torch
 from datetime import datetime
 from faster_whisper import WhisperModel
+import threading
+import re
 
 # Константы для записи аудио
 CHUNK = 1024
@@ -93,6 +95,62 @@ def get_default_input_device():
         p.terminate()
         sys.exit(1)
 
+def save_full_audio(frames_buffer, wav_path, p):
+    """Сохраняет весь аудиобуфер в WAV-файл."""
+    wf = wave.open(wav_path, 'wb')
+    wf.setnchannels(1)
+    wf.setsampwidth(p.get_sample_size(pyaudio.paInt16))
+    wf.setframerate(RATE)
+    for frames in frames_buffer:
+        wf.writeframes(b''.join(frames))
+    wf.close()
+
+def format_text_with_newlines(text):
+    """Разбивает текст на предложения и делает новую строку после точки, !, ?"""
+    # Удаляем лишние пробелы
+    text = re.sub(r'\s+', ' ', text.strip())
+    # Разбиваем по знакам препинания
+    sentences = re.split(r'([.!?])', text)
+    result = ''
+    for i in range(0, len(sentences)-1, 2):
+        sentence = sentences[i].strip()
+        mark = sentences[i+1]
+        if sentence:
+            result += sentence + mark + '\n'
+    # Добавляем остаток, если есть
+    if len(sentences) % 2 != 0 and sentences[-1].strip():
+        result += sentences[-1].strip()
+    return result
+
+def recognize_and_save(model, wav_path, output_file, stop_state):
+    """Распознаёт весь WAV-файл и перезаписывает текстовый файл. Проверяет слово 'стоп'."""
+    try:
+        segments, _ = model.transcribe(wav_path, beam_size=5)
+        text = " ".join([segment.text for segment in segments]).strip()
+        formatted = format_text_with_newlines(text)
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write("=== Начало транскрибации ===\n\n")
+            f.write(formatted + "\n")
+        # Проверяем наличие слова "стоп" в конце текста
+        if re.search(r'(стоп|stop)[.!?\s]*$', text.lower()):
+            stop_state['stop_time'] = time.time()
+        else:
+            stop_state['stop_time'] = None
+    except Exception as e:
+        print(f"\n[ОШИБКА] Не удалось распознать полный WAV: {e}")
+
+def periodic_recognition(frames_buffer, wav_path, output_file, model, p, stop_event, stop_state):
+    """Поток для периодического распознавания всей записи и обновления файла. Останавливает по слову 'стоп'."""
+    while not stop_event.is_set():
+        save_full_audio(frames_buffer, wav_path, p)
+        recognize_and_save(model, wav_path, output_file, stop_state)
+        # Если был сказан "стоп" и прошло 2 секунды молчания — останавливаем
+        if stop_state.get('stop_time') and (time.time() - stop_state['stop_time'] > 2):
+            print("\n[INFO] Обнаружено слово 'стоп' и пауза. Останавливаю запись.")
+            stop_event.set()
+            break
+        stop_event.wait(1)
+
 def main():
     # Выбор модели Whisper
     model_size = "base"  # Мультиязычная модель. Можно изменить на "tiny", "base", "small", "medium", "large"
@@ -130,131 +188,64 @@ def main():
         p.terminate()
         sys.exit(1)
     
-    # Буфер для хранения аудио данных скользящего окна
-    window_buffer = []
-    # Максимальный размер буфера в чанках
-    max_buffer_chunks = int(WINDOW_SIZE_SECONDS / 1)  # Размер окна / размер чанка
-    
-    # Переменная для накопления всего текста
-    accumulated_transcription = ""
-    
     # Создаем файл для записи транскрибации до начала записи
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     output_file = os.path.join(OUTPUT_DIR, f"transcription_{timestamp}.txt")
-    
-    # Создаем пустой файл
     with open(output_file, "w", encoding="utf-8") as f:
         f.write("=== Начало транскрибации ===\n\n")
-    
     print(f"Файл для транскрибации создан: {output_file}")
     print("Начинаю запись с микрофона. Нажмите Ctrl+C для остановки...")
-    
-    # Переменная для отслеживания последней записанной транскрибации
-    last_saved_transcription = ""
-    
+
+    # Буфер для хранения всех аудиофреймов
+    frames_buffer = []
+    # Для каждого чанка будем хранить список фреймов
+    # Например: frames_buffer = [[chunk1_frames], [chunk2_frames], ...]
+
+    # Путь к полному WAV-файлу
+    full_wav_path = os.path.join(OUTPUT_DIR, f"full_record_{timestamp}.wav")
+
+    # Событие для остановки фонового потока
+    stop_event = threading.Event()
+    # Состояние для отслеживания "стопа"
+    stop_state = {'stop_time': None}
+    # Запускаем фоновый поток для периодического распознавания
+    recognition_thread = threading.Thread(
+        target=periodic_recognition,
+        args=(frames_buffer, full_wav_path, output_file, model, p, stop_event, stop_state),
+        daemon=True
+    )
+    recognition_thread.start()
+
     try:
         chunk_counter = 0
         while True:
             chunk_counter += 1
-            
-            # Имя временного файла
             temp_file = "temp_chunk.wav"
-            
-            # Запись чанка
             chunk_frames = record_chunk(p, stream, temp_file)
-            
-            # Добавление нового чанка в буфер скользящего окна
-            window_buffer.append(chunk_frames)
-            
-            # Если буфер превысил максимальный размер, удаляем самый старый чанк
-            if len(window_buffer) > max_buffer_chunks:
-                window_buffer.pop(0)
-            
-            # Объединяем все чанки в буфере в один файл для распознавания
-            combined_file = "combined_chunk.wav"
-            wf = wave.open(combined_file, 'wb')
-            wf.setnchannels(1)
-            wf.setsampwidth(p.get_sample_size(pyaudio.paInt16))
-            wf.setframerate(RATE)
-            
-            # Записываем все фреймы из буфера
-            for frames in window_buffer:
-                wf.writeframes(b''.join(frames))
-            wf.close()
-            
-            # Распознавание речи
-            transcription = transcribe_chunk(model, combined_file)
-            
-            # Вывод в консоль
-            print(f"\r[Чанк {chunk_counter}] {transcription}", end="", flush=True)
-            
-            # Если текст не пустой, добавляем его к общей транскрипции
-            if transcription.strip():
-                # Добавляем пробел только если уже есть текст
-                if accumulated_transcription:
-                    accumulated_transcription += " "
-                accumulated_transcription += transcription
-                
-                # Проверяем, есть ли новый текст для записи в файл
-                new_text = accumulated_transcription[len(last_saved_transcription):].strip()
-                
-                # Если есть новый текст - разбиваем на предложения и записываем в файл
-                if new_text:
-                    # Простое деление на предложения (по точке, восклицательному и вопросительному знакам)
-                    sentences = []
-                    current_sentence = ""
-                    
-                    for char in new_text:
-                        current_sentence += char
-                        if char in ['.', '!', '?'] and current_sentence.strip():
-                            sentences.append(current_sentence.strip())
-                            current_sentence = ""
-                    
-                    # Добавляем оставшийся текст как предложение, если он не пустой
-                    if current_sentence.strip():
-                        sentences.append(current_sentence.strip())
-                    
-                    # Записываем предложения в файл, каждое с новой строки
-                    with open(output_file, "a", encoding="utf-8") as f:
-                        for sentence in sentences:
-                            f.write(f"{sentence}\n")
-                    
-                    # Обновляем последнюю сохраненную транскрибацию
-                    last_saved_transcription = accumulated_transcription
-                
-                # Печатаем новую строку, чтобы показать накопленный текст
-                print(f"\n[Текущая транскрипция] {accumulated_transcription}")
-            
-            # Удаляем временные файлы
+            frames_buffer.append(chunk_frames)
+            # Удаляем временный файл
             try:
                 if os.path.exists(temp_file):
                     os.remove(temp_file)
-                if os.path.exists(combined_file):
-                    os.remove(combined_file)
             except Exception as e:
-                print(f"\nОшибка при удалении временных файлов: {e}")
-    
+                print(f"\nОшибка при удалении временного файла: {e}")
     except KeyboardInterrupt:
         print("\nОстановка записи...")
-    
     finally:
-        # Остановка и закрытие потока
+        stop_event.set()
+        recognition_thread.join()
         try:
             stream.stop_stream()
             stream.close()
         except Exception:
             pass
         p.terminate()
-        
-        # Сохранение полной транскрипции в файл
-        if accumulated_transcription:
-            # Добавляем пометку о завершении записи
-            with open(output_file, "a", encoding="utf-8") as f:
-                f.write("\n=== Конец транскрибации ===\n")
-            
-            print(f"\nПолная транскрипция сохранена в {output_file}")
-        else:
-            print("\nНе было распознано ни одного текста.")
+        # Финальное обновление файла
+        save_full_audio(frames_buffer, full_wav_path, p)
+        recognize_and_save(model, full_wav_path, output_file, stop_state)
+        with open(output_file, "a", encoding="utf-8") as f:
+            f.write("\n=== Конец транскрибации ===\n")
+        print(f"\nПолная транскрипция сохранена в {output_file}")
 
 if __name__ == "__main__":
     main() 

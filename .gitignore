@@ -130,3 +130,6 @@ transcriptions/
 
 # Not neccesary
 .cursor/commands.txt
+
+# Игнорировать все wav-файлы
+*.wav
