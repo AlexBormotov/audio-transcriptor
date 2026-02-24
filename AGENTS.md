@@ -12,33 +12,37 @@ This is a single-script Python application for real-time speech-to-text transcri
 - **No microphone**: The app requires a physical/virtual audio input device via PyAudio. The cloud VM has no audio device. Functions that don't touch the microphone (e.g., `format_text_with_newlines`, `transcribe_chunk`, `recognize_and_save`) can be tested independently.
 - **Python 3.12**: The VM has Python 3.12, while `requirements.txt` pins versions for Python 3.10/3.11. Dependencies are installed without strict version pins to maintain compatibility.
 
+### Architecture
+
+- `transcriber.py` — ядро транскрипции, использует whisper-live/faster-whisper. Автоматический GPU/CPU fallback.
+- `app.py` — Gradio веб-интерфейс (запуск: `python app.py`, порт 7860).
+- `speech_recognition_online.py` — оригинальный скрипт для микрофона (требует CUDA + микрофон).
+
 ### Running the development environment
 
 1. Activate the virtual environment: `source /workspace/venv/bin/activate`
-2. All dependencies (including PyTorch CPU) are pre-installed in the venv.
+2. Start the web UI: `python app.py` (opens at http://localhost:7860)
+3. All dependencies (including PyTorch CPU) are pre-installed in the venv.
 
 ### Linting
 
 ```bash
 source /workspace/venv/bin/activate
-flake8 speech_recognition_online.py --max-line-length=120
-pylint speech_recognition_online.py --disable=C0301 --max-line-length=120
+flake8 transcriber.py app.py --max-line-length=120
 ```
 
 ### Testing transcription (CPU-only)
 
-To test Whisper transcription without GPU/microphone, use the included `combined_chunk.wav` sample:
-
 ```python
-from faster_whisper import WhisperModel
-model = WhisperModel('base', device='cpu', compute_type='int8')
-segments, info = model.transcribe('combined_chunk.wav', beam_size=5)
-text = ' '.join([s.text for s in segments])
+from transcriber import transcribe_file
+text, info = transcribe_file('combined_chunk.wav', 'base', None, 'plain')
 print(text)
 ```
 
 ### Gotchas
 
 - PyAudio requires the `portaudio19-dev` and `python3-dev` system packages to compile.
-- The `main()` function cannot run in the cloud VM due to CUDA and microphone requirements. Test individual functions instead.
+- `speech_recognition_online.py` cannot run in the cloud VM (needs CUDA + microphone). Use `app.py` instead.
+- `gr.File(type="filepath")` in Gradio 6.x may not render text in output Textbox. Use `gr.Audio(type="filepath")` instead for file upload.
+- Video files (mp4, mkv, avi) are preprocessed through ffmpeg to extract audio before transcription.
 - The `venv/` directory is in `.gitignore` and should not be committed.
