@@ -34,35 +34,33 @@ LANGUAGES = {
     "हिन्दी": "hi",
 }
 
-VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".webm", ".mov", ".flv"}
 
-
-def extract_audio(video_path):
-    """Извлекает аудио из видеофайла через ffmpeg.
+def convert_to_wav(input_path):
+    """Конвертирует аудио/видео файл в WAV 16kHz mono через ffmpeg.
 
     Returns:
-        str: путь к временному WAV-файлу с аудио
+        str: путь к сконвертированному WAV-файлу
     """
-    audio_path = tempfile.mktemp(suffix=".wav")
+    wav_path = tempfile.mktemp(suffix=".wav")
     cmd = [
-        "ffmpeg", "-i", video_path,
+        "ffmpeg", "-i", input_path,
         "-vn", "-acodec", "pcm_s16le",
         "-ar", "16000", "-ac", "1",
-        "-y", audio_path,
+        "-y", wav_path,
     ]
     result = subprocess.run(
         cmd, capture_output=True, text=True, timeout=300
     )
     if result.returncode != 0:
-        raise RuntimeError(f"ffmpeg ошибка: {result.stderr[:200]}")
-    return audio_path
+        raise RuntimeError(f"ffmpeg ошибка: {result.stderr[:300]}")
+    return wav_path
 
 
 def process_file(file_path, model_size, language_name, output_format_name):
     """Обрабатывает загруженный файл и возвращает транскрипцию.
 
     Args:
-        file_path: путь к загруженному файлу (строка)
+        file_path: путь к загруженному файлу
         model_size: размер модели Whisper
         language_name: отображаемое имя языка
         output_format_name: "Сплошной текст" или "С таймкодами"
@@ -76,29 +74,23 @@ def process_file(file_path, model_size, language_name, output_format_name):
     if not os.path.exists(file_path):
         raise gr.Error(f"Файл не найден: {file_path}")
 
-    # Если это видео — извлекаем аудио через ffmpeg
-    ext = os.path.splitext(file_path)[1].lower()
-    audio_path = file_path
-    temp_audio = None
-    if ext in VIDEO_EXTENSIONS:
-        temp_audio = extract_audio(file_path)
-        audio_path = temp_audio
+    # Конвертируем в WAV 16kHz mono для стабильной работы Whisper
+    wav_path = convert_to_wav(file_path)
 
     lang_code = LANGUAGES.get(language_name, "auto")
     fmt = "timestamps" if output_format_name == "С таймкодами" else "plain"
 
     try:
         text, lang_info = transcribe_file(
-            audio_path, model_size, lang_code, fmt
+            wav_path, model_size, lang_code, fmt
         )
     finally:
-        if temp_audio and os.path.exists(temp_audio):
-            os.remove(temp_audio)
+        if os.path.exists(wav_path):
+            os.remove(wav_path)
 
-    if not text:
-        raise gr.Error(
-            "Транскрипция не дала результатов. Попробуйте другой файл."
-        )
+    if not text.strip():
+        text = "(Речь не распознана. Попробуйте другой файл или модель.)"
+        gr.Warning("Транскрипция не дала результатов. Попробуйте повторить.")
 
     # Сохраняем результат во временный файл для скачивания
     base_name = os.path.splitext(os.path.basename(file_path))[0]
@@ -139,10 +131,13 @@ def build_ui():
 
         with gr.Row():
             with gr.Column(scale=1):
-                file_input = gr.Audio(
+                file_input = gr.File(
                     label="Загрузите аудио/видео файл",
+                    file_types=[
+                        ".mp3", ".mp4", ".wav", ".flac", ".ogg",
+                        ".m4a", ".wma", ".aac", ".webm", ".mkv", ".avi",
+                    ],
                     type="filepath",
-                    sources=["upload"],
                 )
                 model_size = gr.Dropdown(
                     choices=MODEL_SIZES,
