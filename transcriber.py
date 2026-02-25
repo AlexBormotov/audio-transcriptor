@@ -1,13 +1,24 @@
 """
 Модуль транскрипции аудио/видео файлов.
 
-Использует faster-whisper для распознавания речи.
+Использует WhisperLive (faster-whisper backend) для распознавания речи.
 Поддерживает GPU (CUDA) с автоматическим переключением на CPU
 при отсутствии CUDA или необходимых библиотек (cublas, cudnn).
 """
 
 import torch
-from faster_whisper import WhisperModel
+try:
+    # Основной backend: WhisperLive (по запросу пользователя).
+    from whisper_live.transcriber.transcriber_faster_whisper import (
+        WhisperModel as BackendWhisperModel,
+    )
+    _backend_name = "whisper-live"
+    _backend_import_error = None
+except Exception as import_error:
+    # Безопасный fallback: если WhisperLive не импортируется, используем faster-whisper напрямую.
+    from faster_whisper import WhisperModel as BackendWhisperModel
+    _backend_name = "faster-whisper"
+    _backend_import_error = import_error
 
 
 # Кэш загруженных моделей: {model_size: (WhisperModel, device)}
@@ -16,6 +27,14 @@ _model_cache = {}
 # Актуальное устройство после инициализации (может измениться при fallback)
 _active_device = None
 _active_compute = None
+_backend_warning_printed = False
+
+
+def get_backend_info():
+    """Возвращает backend транскрипции и причину fallback (если есть)."""
+    if _backend_import_error is None:
+        return _backend_name, None
+    return _backend_name, str(_backend_import_error)
 
 
 def get_device_info():
@@ -42,7 +61,7 @@ def _try_load_model(model_size, device, compute_type):
     Raises:
         Exception: если загрузка не удалась
     """
-    return WhisperModel(model_size, device=device, compute_type=compute_type)
+    return BackendWhisperModel(model_size, device=device, compute_type=compute_type)
 
 
 def get_model(model_size="base"):
@@ -57,10 +76,15 @@ def get_model(model_size="base"):
     Returns:
         WhisperModel: загруженная модель
     """
-    global _active_device, _active_compute
+    global _active_device, _active_compute, _backend_warning_printed
 
     if model_size in _model_cache:
         return _model_cache[model_size]
+
+    if _backend_import_error is not None and not _backend_warning_printed:
+        print("[WARN] WhisperLive backend недоступен, используем faster-whisper.")
+        print(f"[WARN] Причина: {_backend_import_error}")
+        _backend_warning_printed = True
 
     device, compute_type = get_device_info()
 

@@ -11,7 +11,7 @@ import tempfile
 
 import gradio as gr
 
-from transcriber import transcribe_file, get_device_info
+from transcriber import transcribe_file, get_backend_info, get_device_info
 
 # Доступные размеры моделей Whisper
 MODEL_SIZES = ["tiny", "base", "small", "medium", "large-v3"]
@@ -105,9 +105,14 @@ def process_file(file_path, model_size, language_name, output_format_name):
     prob = lang_info["probability"]
     # get_device_info возвращает актуальное устройство после fallback
     actual_device, actual_compute = get_device_info()
+    backend_name, backend_error = get_backend_info()
+    backend_label = backend_name
+    if backend_error:
+        backend_label = f"{backend_name} (fallback)"
     info_text = (
         f"Язык: {detected} ({prob:.0%}) | "
         f"Устройство: {actual_device.upper()} ({actual_compute}) | "
+        f"Backend: {backend_label} | "
         f"Модель: {model_size}"
     )
 
@@ -117,6 +122,7 @@ def process_file(file_path, model_size, language_name, output_format_name):
 def build_ui():
     """Создаёт и возвращает Gradio-интерфейс."""
     device, compute_type = get_device_info()
+    backend_name, _ = get_backend_info()
     if device == "cuda":
         device_badge = "🟢 GPU (CUDA)"
     else:
@@ -127,7 +133,8 @@ def build_ui():
             f"# 🎙️ Транскрибатор аудио и видео\n"
             f"Загрузите файл (mp3, mp4, wav, flac, ogg, m4a, webm, mkv, avi) "
             f"и получите текстовую транскрипцию.\n\n"
-            f"**Устройство:** {device_badge} ({compute_type})"
+            f"**Устройство:** {device_badge} ({compute_type})  \n"
+            f"**Backend:** {backend_name}"
         )
 
         with gr.Row():

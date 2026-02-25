@@ -1,6 +1,6 @@
 # Транскрибатор аудио и видео
 
-Веб-приложение для транскрипции аудио/видео файлов с помощью модели Whisper (faster-whisper). Поддерживает GPU (CUDA) и автоматически переключается на CPU при недоступности.
+Веб-приложение для транскрипции аудио/видео файлов с помощью WhisperLive (backend: faster-whisper). Поддерживает GPU (CUDA) и автоматически переключается на CPU при недоступности.
 
 ## Возможности
 
@@ -8,6 +8,7 @@
 - **Два формата вывода**: сплошной текст или с таймкодами `[HH:MM:SS.mmm --> HH:MM:SS.mmm]`
 - **Скачивание результата** в .txt файл
 - **GPU ускорение** (CUDA) с автоматическим fallback на CPU
+- **WhisperLive backend** по умолчанию (с fallback на faster-whisper при проблемах импорта)
 - **Мультиязычность**: русский, английский и 10+ других языков
 - **Веб-интерфейс** (Gradio) — работает в браузере на любой ОС
 - **Онлайн-распознавание с микрофона** (legacy режим, `speech_recognition_online.py`)
@@ -84,6 +85,8 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 # Затем остальные зависимости
 pip install -r requirements.txt
 ```
+
+`requirements.txt` уже фиксирует совместимую пару: `whisper-live==0.7.1` и `faster-whisper==1.1.0`.
 
 ### PyTorch не видит CUDA
 

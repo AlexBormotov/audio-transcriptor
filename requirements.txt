@@ -1,5 +1,6 @@
-# Движок транскрипции
-faster-whisper>=1.0.0
+# Движок транскрипции (WhisperLive + совместимая версия faster-whisper)
+whisper-live==0.7.1
+faster-whisper==1.1.0
 
 # Веб-интерфейс
 gradio>=4.0.0
