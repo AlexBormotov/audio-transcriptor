@@ -86,7 +86,7 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 pip install -r requirements.txt
 ```
 
-`requirements.txt` уже фиксирует совместимую пару: `whisper-live==0.7.1` и `faster-whisper==1.1.0`.
+`requirements.txt` фиксирует связку с `faster-whisper==1.2.0` и ставит `WhisperLive` из GitHub `main`, потому что текущий PyPI-релиз `0.7.1` содержит старый backend-файл и может быть несовместим с `faster-whisper 1.2.x`.
 
 ### PyTorch не видит CUDA
 

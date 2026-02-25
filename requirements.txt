@@ -1,6 +1,8 @@
-# Движок транскрипции (WhisperLive + совместимая версия faster-whisper)
-whisper-live==0.7.1
-faster-whisper==1.1.0
+# Движок транскрипции.
+# Важно: берём WhisperLive из GitHub main, потому что релиз PyPI 0.7.1
+# содержит старый backend, несовместимый с faster-whisper 1.2.x.
+whisper-live @ git+https://github.com/collabora/WhisperLive.git@main
+faster-whisper==1.2.0
 
 # Веб-интерфейс
 gradio>=4.0.0
