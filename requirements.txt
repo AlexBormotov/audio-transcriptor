@@ -2,7 +2,10 @@
 # Важно: берём WhisperLive из GitHub main, потому что релиз PyPI 0.7.1
 # содержит старый backend, несовместимый с faster-whisper 1.2.x.
 whisper-live @ git+https://github.com/collabora/WhisperLive.git@main
-faster-whisper==1.2.0
+
+# Важно: пин faster-whisper 1.2.0 нельзя ставить здесь вместе с WhisperLive,
+# так как metadata пакета WhisperLive пока ещё требует 1.1.0.
+# Для перехода на 1.2.0 используйте шаг из README после установки requirements.
 
 # Веб-интерфейс
 gradio>=4.0.0
