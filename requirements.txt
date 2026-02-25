@@ -1,7 +1,22 @@
-whisper-live>=0.7.0
-faster-whisper>=1.1.0
+# Движок транскрипции.
+# Важно: берём WhisperLive из GitHub main, потому что релиз PyPI 0.7.1
+# содержит старый backend, несовместимый с faster-whisper 1.2.x.
+whisper-live @ git+https://github.com/collabora/WhisperLive.git@main
+
+# Важно: пин faster-whisper 1.2.0 нельзя ставить здесь вместе с WhisperLive,
+# так как metadata пакета WhisperLive пока ещё требует 1.1.0.
+# Для перехода на 1.2.0 используйте шаг из README после установки requirements.
+
+# Веб-интерфейс
 gradio>=4.0.0
-torch>=2.0.0
-pyaudio>=0.2.13
-numpy>=1.24.0
+
+# PyTorch — установить ОТДЕЛЬНО с нужным бэкендом:
+#   GPU (CUDA 12.1): pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+#   CPU:             pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+# torch>=2.0.0
+
+# Обработка аудио/видео (зависимость faster-whisper, обычно ставится автоматически)
 av>=11.0.0
+
+# Для работы с микрофоном (опционально, требует portaudio)
+# pyaudio>=0.2.13
