@@ -71,7 +71,8 @@ python speech_recognition_online.py
 
 Эта ошибка означает, что CUDA-библиотеки не найдены. Решения:
 
-1. **Установите CUDA Toolkit 12.x** с сайта NVIDIA: https://developer.nvidia.com/cuda-downloads
+1. **Установите CUDA Toolkit 12.x или 13.x** с сайта NVIDIA: https://developer.nvidia.com/cuda-downloads  
+   (для PyTorch обычно используются колёса `cu121`; важна совместимость драйвера NVIDIA)
 2. **Или**: приложение автоматически переключится на CPU — просто перезапустите `python app.py`
 
 ### Конфликты зависимостей при pip install
