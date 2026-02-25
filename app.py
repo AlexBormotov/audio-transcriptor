@@ -103,10 +103,11 @@ def process_file(file_path, model_size, language_name, output_format_name):
 
     detected = lang_info["language"]
     prob = lang_info["probability"]
-    device, compute = get_device_info()
+    # get_device_info возвращает актуальное устройство после fallback
+    actual_device, actual_compute = get_device_info()
     info_text = (
         f"Язык: {detected} ({prob:.0%}) | "
-        f"Устройство: {device.upper()} ({compute}) | "
+        f"Устройство: {actual_device.upper()} ({actual_compute}) | "
         f"Модель: {model_size}"
     )
 
