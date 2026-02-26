@@ -7,8 +7,16 @@ whisper-live @ git+https://github.com/collabora/WhisperLive.git@main
 # так как metadata пакета WhisperLive пока ещё требует 1.1.0.
 # Для перехода на 1.2.0 используйте шаг из README после установки requirements.
 
-# Веб-интерфейс
+# --- GUI ---
+
+# Десктопный интерфейс (PySide6 = Qt for Python, LGPL)
+PySide6>=6.6.0
+
+# Веб-интерфейс (альтернативный)
 gradio>=4.0.0
+
+# --- Сборка Windows .exe (опционально, для разработчиков) ---
+# pyinstaller>=6.0.0
 
 # PyTorch — установить ОТДЕЛЬНО с нужным бэкендом:
 #   GPU (CUDA 12.1): pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121

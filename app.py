@@ -12,27 +12,7 @@ import tempfile
 import gradio as gr
 
 from transcriber import transcribe_file, get_backend_info, get_device_info
-
-# Доступные размеры моделей Whisper
-MODEL_SIZES = ["tiny", "base", "small", "medium", "large-v3"]
-
-# Поддерживаемые языки: отображаемое имя -> код
-LANGUAGES = {
-    "Автоопределение": "auto",
-    "Русский": "ru",
-    "English": "en",
-    "Deutsch": "de",
-    "Français": "fr",
-    "Español": "es",
-    "中文": "zh",
-    "日本語": "ja",
-    "한국어": "ko",
-    "Italiano": "it",
-    "Português": "pt",
-    "Türkçe": "tr",
-    "العربية": "ar",
-    "हिन्दी": "hi",
-}
+from constants import MODEL_SIZES, LANGUAGES
 
 
 def convert_to_wav(input_path):
