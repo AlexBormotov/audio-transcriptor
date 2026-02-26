@@ -48,8 +48,15 @@ def convert_to_wav(input_path):
         "-ar", "16000", "-ac", "1",
         "-y", wav_path,
     ]
+    # На Windows вывод ffmpeg может содержать байты вне cp1252.
+    # Явно читаем как UTF-8 и не падаем на "битых" символах.
     result = subprocess.run(
-        cmd, capture_output=True, text=True, timeout=300
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=300,
     )
     if result.returncode != 0:
         raise RuntimeError(f"ffmpeg ошибка: {result.stderr[:300]}")
