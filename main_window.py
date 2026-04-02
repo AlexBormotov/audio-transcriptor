@@ -174,46 +174,65 @@ class MainWindow(QMainWindow):
 
     def _apply_styles(self):
         """Применяет современный плоский стиль ко всему окну."""
+        # Везде явный тёмный текст (#1a1a1a), иначе на Windows с тёмной темой
+        # виджеты могут рисовать светлый текст поверх светлого фона из QSS.
         self.setStyleSheet("""
-            QMainWindow { background: #ffffff; }
-            QLabel { font-size: 13px; }
+            QMainWindow, QWidget { background: #ffffff; color: #1a1a1a; }
+            QLabel { font-size: 13px; color: #1a1a1a; }
             #dropZone {
                 border: 2px dashed #b0b0b0;
                 border-radius: 12px;
                 background: #f8f9fa;
-                color: #555;
+                color: #333333;
                 font-size: 14px;
                 padding: 20px;
             }
-            #dropZone:hover { border-color: #4a9eff; background: #f0f6ff; }
+            #dropZone:hover { border-color: #4a9eff; background: #f0f6ff; color: #1a1a1a; }
             QPushButton {
                 padding: 8px 16px; border-radius: 6px;
                 border: 1px solid #ddd; background: #f8f9fa; font-size: 13px;
+                color: #1a1a1a;
             }
             QPushButton:hover { background: #e9ecef; }
-            QPushButton:disabled { color: #aaa; }
+            QPushButton:disabled { color: #888888; background: #f0f0f0; }
             #primaryBtn {
-                background: #4a9eff; color: white;
+                background: #4a9eff; color: #ffffff;
                 border: none; font-weight: bold; font-size: 14px;
             }
-            #primaryBtn:hover { background: #3a8eef; }
-            #primaryBtn:disabled { background: #b0d4ff; }
+            #primaryBtn:hover { background: #3a8eef; color: #ffffff; }
+            #primaryBtn:disabled { background: #b0d4ff; color: #ffffff; }
             QTextEdit {
                 border: 1px solid #ddd; border-radius: 8px;
-                padding: 12px; font-size: 13px; background: #fafafa;
+                padding: 12px; font-size: 13px;
+                background: #fafafa; color: #1a1a1a;
             }
             QComboBox {
                 padding: 6px 12px; border: 1px solid #ddd;
-                border-radius: 6px; background: white;
+                border-radius: 6px; background: #ffffff; color: #1a1a1a;
+                min-height: 1.2em;
             }
+            QComboBox:hover { border-color: #4a9eff; }
+            /* Выпадающий список — отдельное представление; без color текст бывает белым */
+            QComboBox QAbstractItemView {
+                background: #ffffff;
+                color: #1a1a1a;
+                selection-background-color: #cfe8ff;
+                selection-color: #1a1a1a;
+                outline: 0;
+            }
+            QRadioButton { color: #1a1a1a; spacing: 8px; }
+            QRadioButton::indicator { width: 16px; height: 16px; }
             QGroupBox {
-                font-weight: bold; border: 1px solid #eee;
+                font-weight: bold; color: #1a1a1a;
+                border: 1px solid #eee;
                 border-radius: 8px; margin-top: 8px; padding-top: 16px;
             }
             QGroupBox::title {
                 subcontrol-origin: margin; left: 10px; padding: 0 6px;
+                color: #1a1a1a;
             }
-            QStatusBar { border-top: 1px solid #eee; font-size: 12px; }
+            QStatusBar { border-top: 1px solid #eee; font-size: 12px; color: #1a1a1a; }
+            QStatusBar QLabel { color: #1a1a1a; }
         """)
 
     # --- Обработчики событий ---

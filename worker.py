@@ -6,12 +6,10 @@
 """
 
 import os
-import subprocess
-import tempfile
 
 from PySide6.QtCore import QThread, Signal
 
-from transcriber import transcribe_file
+from transcriber import transcribe_file, media_to_wav_16k_mono
 
 
 class TranscribeWorker(QThread):
@@ -34,7 +32,8 @@ class TranscribeWorker(QThread):
         wav_path = None
         try:
             self.progress.emit("Конвертация аудио в WAV...")
-            wav_path = self._convert_to_wav(self.file_path)
+            # Длинные ролики: без жёсткого таймаута ffmpeg (раньше 300 с могло обрывать конвертацию).
+            wav_path = media_to_wav_16k_mono(self.file_path, timeout=None)
 
             self.progress.emit(f"Загрузка модели {self.model_size}...")
 
@@ -58,21 +57,3 @@ class TranscribeWorker(QThread):
                     os.remove(wav_path)
                 except OSError:
                     pass
-
-    @staticmethod
-    def _convert_to_wav(input_path):
-        """Конвертирует аудио/видео в WAV 16kHz mono через ffmpeg."""
-        wav_path = tempfile.mktemp(suffix=".wav")
-        cmd = [
-            "ffmpeg", "-i", input_path,
-            "-vn", "-acodec", "pcm_s16le",
-            "-ar", "16000", "-ac", "1",
-            "-y", wav_path,
-        ]
-        result = subprocess.run(
-            cmd, capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=300,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"ffmpeg ошибка: {result.stderr[:500]}")
-        return wav_path

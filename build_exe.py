@@ -22,6 +22,14 @@ def build():
     except ImportError:
         print("PyInstaller не установлен. Установите: pip install pyinstaller")
         sys.exit(1)
+    # Важно: GUI зависит от PySide6, без него exe соберётся некорректно.
+    # Проверяем заранее и падаем с понятной инструкцией.
+    try:
+        import PySide6  # noqa: F401
+    except ImportError:
+        print("PySide6 не установлен в текущем Python-окружении.")
+        print("Установите зависимости в активном venv: pip install -r requirements.txt")
+        sys.exit(1)
 
     app_name = "Transcriber"
     main_script = "main.py"
