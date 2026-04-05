@@ -237,8 +237,14 @@ class MainWindow(QMainWindow):
 
     # --- Обработчики событий ---
 
+    def _is_transcribing(self):
+        """Проверяет, идёт ли транскрипция в данный момент."""
+        return self.worker is not None and self.worker.isRunning()
+
     def _on_file_selected(self, path):
         """Вызывается при выборе файла (drag & drop или диалог)."""
+        if self._is_transcribing():
+            return
         self.current_file = path
         self.drop_zone.set_file(path)
         self.transcribe_btn.setEnabled(True)
@@ -249,6 +255,7 @@ class MainWindow(QMainWindow):
         if not self.current_file:
             return
         self.transcribe_btn.setEnabled(False)
+        self.drop_zone.setAcceptDrops(False)
         self.progress_bar.setVisible(True)
         self.result_text.clear()
         self.copy_btn.setEnabled(False)
@@ -272,6 +279,7 @@ class MainWindow(QMainWindow):
         """Обработка успешного завершения транскрипции."""
         self.progress_bar.setVisible(False)
         self.transcribe_btn.setEnabled(True)
+        self.drop_zone.setAcceptDrops(True)
         self.result_text.setPlainText(text)
         self.copy_btn.setEnabled(True)
         self.save_btn.setEnabled(True)
@@ -288,6 +296,7 @@ class MainWindow(QMainWindow):
         """Обработка ошибки транскрипции."""
         self.progress_bar.setVisible(False)
         self.transcribe_btn.setEnabled(True)
+        self.drop_zone.setAcceptDrops(True)
         self.status_label.setText("❌ Ошибка")
         QMessageBox.critical(self, "Ошибка транскрипции", error_msg)
 

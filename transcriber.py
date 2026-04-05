@@ -153,14 +153,17 @@ def media_to_wav_16k_mono(input_path, timeout=None):
         "-ar", "16000", "-ac", "1",
         "-y", wav_path,
     ]
-    result = subprocess.run(
-        cmd,
+    kwargs = dict(
         capture_output=True,
         text=True,
         encoding="utf-8",
         errors="replace",
         timeout=timeout,
     )
+    # На Windows GUI-приложение без консоли порождает видимое окно cmd для каждого subprocess.
+    if sys.platform == "win32":
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    result = subprocess.run(cmd, **kwargs)
     if result.returncode != 0:
         try:
             os.remove(wav_path)

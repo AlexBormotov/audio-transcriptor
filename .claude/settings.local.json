@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import ast; ast.parse\\(open\\('transcriber.py'\\).read\\(\\)\\); print\\('transcriber.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('main_window.py'\\).read\\(\\)\\); print\\('main_window.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('app.py'\\).read\\(\\)\\); print\\('app.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('build_exe.py'\\).read\\(\\)\\); print\\('build_exe.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('transcriber.py', encoding='utf-8'\\).read\\(\\)\\); print\\('transcriber.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('main_window.py', encoding='utf-8'\\).read\\(\\)\\); print\\('main_window.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('app.py', encoding='utf-8'\\).read\\(\\)\\); print\\('app.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('build_exe.py', encoding='utf-8'\\).read\\(\\)\\); print\\('build_exe.py OK'\\)\")"
+    ]
+  }
+}
