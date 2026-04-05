@@ -4,7 +4,11 @@
 
 ### Overview
 
-This is a single-script Python application for real-time speech-to-text transcription from microphone using Whisper (`faster-whisper`). The main entry point is `speech_recognition_online.py`.
+This is a Python application for speech-to-text transcription using Whisper (`faster-whisper`). It has two interfaces:
+- **Desktop app** (`main.py`) — PySide6 GUI with drag & drop, designed for Windows x64 distribution
+- **Web app** (`app.py`) — Gradio web interface as alternative
+
+The original microphone-based script is `speech_recognition_online.py`.
 
 ### Key constraints in Cloud VM
 
@@ -14,21 +18,28 @@ This is a single-script Python application for real-time speech-to-text transcri
 
 ### Architecture
 
+- `constants.py` — общие константы (модели, языки, расширения файлов).
 - `transcriber.py` — ядро транскрипции, использует whisper-live/faster-whisper. Автоматический GPU/CPU fallback.
+- `main.py` — точка входа десктопного приложения (PySide6).
+- `main_window.py` — главное окно с drag & drop, настройками и результатом.
+- `worker.py` — фоновый QThread для транскрипции без блокировки UI.
 - `app.py` — Gradio веб-интерфейс (запуск: `python app.py`, порт 7860).
+- `build_exe.py` — скрипт сборки Windows .exe через PyInstaller.
+- `installer.iss` — конфиг Inno Setup для создания установщика.
 - `speech_recognition_online.py` — оригинальный скрипт для микрофона (требует CUDA + микрофон).
 
 ### Running the development environment
 
 1. Activate the virtual environment: `source /workspace/venv/bin/activate`
-2. Start the web UI: `python app.py` (opens at http://localhost:7860)
-3. All dependencies (including PyTorch CPU) are pre-installed in the venv.
+2. Start the desktop app: `python main.py` (PySide6 window)
+3. Start the web UI: `python app.py` (opens at http://localhost:7860)
+4. All dependencies (including PyTorch CPU, PySide6) are pre-installed in the venv.
 
 ### Linting
 
 ```bash
 source /workspace/venv/bin/activate
-flake8 transcriber.py app.py --max-line-length=120
+flake8 transcriber.py app.py main.py main_window.py worker.py constants.py --max-line-length=120
 ```
 
 ### Testing transcription (CPU-only)
@@ -39,6 +50,15 @@ text, info = transcribe_file('combined_chunk.wav', 'base', None, 'plain')
 print(text)
 ```
 
+### Testing desktop UI (Cloud VM)
+
+The PySide6 desktop app can be launched in the cloud VM with a virtual display:
+```bash
+source /workspace/venv/bin/activate
+python main.py
+```
+Use the `computerUse` subagent to interact with the UI and take screenshots.
+
 ### Gotchas
 
 - PyAudio requires the `portaudio19-dev` and `python3-dev` system packages to compile.
@@ -46,3 +66,5 @@ print(text)
 - `gr.File(type="filepath")` in Gradio 6.x may not render text in output Textbox. Use `gr.Audio(type="filepath")` instead for file upload.
 - Video files (mp4, mkv, avi) are preprocessed through ffmpeg to extract audio before transcription.
 - The `venv/` directory is in `.gitignore` and should not be committed.
+- Building Windows .exe requires running `build_exe.py` on Windows with PyInstaller installed.
+- Inno Setup installer requires Inno Setup Compiler (Windows only).

@@ -6,61 +6,12 @@
 """
 
 import os
-import subprocess
 import tempfile
 
 import gradio as gr
 
-from transcriber import transcribe_file, get_backend_info, get_device_info
-
-# Доступные размеры моделей Whisper
-MODEL_SIZES = ["tiny", "base", "small", "medium", "large-v3"]
-
-# Поддерживаемые языки: отображаемое имя -> код
-LANGUAGES = {
-    "Автоопределение": "auto",
-    "Русский": "ru",
-    "English": "en",
-    "Deutsch": "de",
-    "Français": "fr",
-    "Español": "es",
-    "中文": "zh",
-    "日本語": "ja",
-    "한국어": "ko",
-    "Italiano": "it",
-    "Português": "pt",
-    "Türkçe": "tr",
-    "العربية": "ar",
-    "हिन्दी": "hi",
-}
-
-
-def convert_to_wav(input_path):
-    """Конвертирует аудио/видео файл в WAV 16kHz mono через ffmpeg.
-
-    Returns:
-        str: путь к сконвертированному WAV-файлу
-    """
-    wav_path = tempfile.mktemp(suffix=".wav")
-    cmd = [
-        "ffmpeg", "-i", input_path,
-        "-vn", "-acodec", "pcm_s16le",
-        "-ar", "16000", "-ac", "1",
-        "-y", wav_path,
-    ]
-    # На Windows вывод ffmpeg может содержать байты вне cp1252.
-    # Явно читаем как UTF-8 и не падаем на "битых" символах.
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=300,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"ffmpeg ошибка: {result.stderr[:300]}")
-    return wav_path
+from transcriber import transcribe_file, get_backend_info, get_device_info, media_to_wav_16k_mono
+from constants import MODEL_SIZES, LANGUAGES
 
 
 def process_file(file_path, model_size, language_name, output_format_name):
@@ -82,7 +33,7 @@ def process_file(file_path, model_size, language_name, output_format_name):
         raise gr.Error(f"Файл не найден: {file_path}")
 
     # Конвертируем в WAV 16kHz mono для стабильной работы Whisper
-    wav_path = convert_to_wav(file_path)
+    wav_path = media_to_wav_16k_mono(file_path, timeout=300)
 
     lang_code = LANGUAGES.get(language_name, "auto")
     fmt = "timestamps" if output_format_name == "С таймкодами" else "plain"

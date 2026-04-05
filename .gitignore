@@ -29,7 +29,10 @@ MANIFEST
 
 # PyInstaller
 *.manifest
-*.spec
+# *.spec — не игнорируем, т.к. может понадобиться для сборки
+
+# Артефакты сборки (PyInstaller + Inno Setup)
+installer_output/
 
 # Installer logs
 pip-log.txt
