@@ -12,11 +12,13 @@ from PySide6.QtWidgets import (
     QPushButton, QComboBox, QRadioButton, QTextEdit,
     QLabel, QFileDialog, QProgressBar,
     QButtonGroup, QGroupBox, QMessageBox, QApplication,
+    QStackedWidget,
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QDragEnterEvent, QDropEvent
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QCloseEvent
 
 from constants import MODEL_SIZES, LANGUAGES, SUPPORTED_EXTENSIONS, APP_NAME
+from media_preview import MediaPreviewWidget
 from worker import TranscribeWorker
 from transcriber import get_device_info, get_backend_info
 
@@ -89,11 +91,16 @@ class MainWindow(QMainWindow):
         root.setSpacing(12)
         root.setContentsMargins(16, 16, 16, 16)
 
-        # Верхняя часть: drop zone + настройки
+        # Верхняя часть: зона импорта ИЛИ превью плеера + настройки
         top = QHBoxLayout()
+        self._file_stack = QStackedWidget()
         self.drop_zone = DropZone()
         self.drop_zone.file_dropped.connect(self._on_file_selected)
-        top.addWidget(self.drop_zone, stretch=2)
+        self._file_stack.addWidget(self.drop_zone)
+        self.media_preview = MediaPreviewWidget()
+        self.media_preview.file_selected.connect(self._on_file_selected)
+        self._file_stack.addWidget(self.media_preview)
+        top.addWidget(self._file_stack, stretch=2)
 
         settings = self._build_settings_panel()
         top.addLayout(settings, stretch=1)
@@ -233,6 +240,11 @@ class MainWindow(QMainWindow):
             }
             QStatusBar { border-top: 1px solid #eee; font-size: 12px; color: #1a1a1a; }
             QStatusBar QLabel { color: #1a1a1a; }
+            QVideoWidget { background: #000000; border-radius: 8px; }
+            QSlider::groove:horizontal { height: 6px; background: #e0e0e0; border-radius: 3px; }
+            QSlider::handle:horizontal {
+                width: 14px; margin: -5px 0; border-radius: 7px; background: #4a9eff;
+            }
         """)
 
     # --- Обработчики событий ---
@@ -241,12 +253,19 @@ class MainWindow(QMainWindow):
         """Проверяет, идёт ли транскрипция в данный момент."""
         return self.worker is not None and self.worker.isRunning()
 
+    def closeEvent(self, event: QCloseEvent):
+        """Останавливаем плеер при закрытии окна."""
+        self.media_preview.shutdown()
+        super().closeEvent(event)
+
     def _on_file_selected(self, path):
         """Вызывается при выборе файла (drag & drop или диалог)."""
         if self._is_transcribing():
             return
         self.current_file = path
-        self.drop_zone.set_file(path)
+        # Пока файла нет — страница 0 (drag & drop); после выбора — плеер + «Открыть» снизу
+        self._file_stack.setCurrentIndex(1)
+        self.media_preview.load(path)
         self.transcribe_btn.setEnabled(True)
         self.status_label.setText(f"Файл: {os.path.basename(path)}")
 
@@ -256,6 +275,7 @@ class MainWindow(QMainWindow):
             return
         self.transcribe_btn.setEnabled(False)
         self.drop_zone.setAcceptDrops(False)
+        self.media_preview.set_interactive(False)
         self.progress_bar.setVisible(True)
         self.result_text.clear()
         self.copy_btn.setEnabled(False)
@@ -280,6 +300,7 @@ class MainWindow(QMainWindow):
         self.progress_bar.setVisible(False)
         self.transcribe_btn.setEnabled(True)
         self.drop_zone.setAcceptDrops(True)
+        self.media_preview.set_interactive(True)
         self.result_text.setPlainText(text)
         self.copy_btn.setEnabled(True)
         self.save_btn.setEnabled(True)
@@ -297,6 +318,7 @@ class MainWindow(QMainWindow):
         self.progress_bar.setVisible(False)
         self.transcribe_btn.setEnabled(True)
         self.drop_zone.setAcceptDrops(True)
+        self.media_preview.set_interactive(True)
         self.status_label.setText("❌ Ошибка")
         QMessageBox.critical(self, "Ошибка транскрипции", error_msg)
 

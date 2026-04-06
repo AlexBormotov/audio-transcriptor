@@ -31,6 +31,9 @@ SUPPORTED_EXTENSIONS = {
     ".m4a", ".wma", ".aac", ".webm", ".mkv", ".avi",
 }
 
+# Контейнеры с видеодорожкой: для превью показываем QVideoWidget (остальное — аудио-панель)
+VIDEO_EXTENSIONS = {".mp4", ".webm", ".mkv", ".avi"}
+
 # Версия приложения
 APP_VERSION = "1.0.0"
 APP_NAME = "Транскрибатор"
