@@ -8,42 +8,34 @@
 
 import sys
 
-from PySide6.QtWidgets import QApplication
-from PySide6.QtGui import QIcon, QPalette, QColor
+from PySide6.QtWidgets import QApplication, QSplashScreen
+from PySide6.QtGui import QIcon, QPixmap, QColor
+from PySide6.QtCore import Qt
 
 from constants import APP_NAME
 from main_window import MainWindow
 
 
-def _apply_light_palette(app: QApplication) -> None:
+def _show_loading_splash() -> QSplashScreen:
     """
-    Явная светлая палитра: на Windows 11 с тёмной темой система может отдавать
-    светлый текст, а QSS задаёт светлый фон — получается «белое на белом».
-    Fusion + палитра фиксируют цвет текста и списков QComboBox.
+    Показывает простой стартовый экран:
+    символ загрузки + надпись Loading...
     """
-    app.setStyle("Fusion")
-    p = QPalette()
-    dark = QColor(26, 26, 26)
-    white = QColor(255, 255, 255)
-    gray_bg = QColor(248, 249, 250)
-    p.setColor(QPalette.Window, white)
-    p.setColor(QPalette.WindowText, dark)
-    p.setColor(QPalette.Base, white)
-    p.setColor(QPalette.AlternateBase, gray_bg)
-    p.setColor(QPalette.Text, dark)
-    p.setColor(QPalette.Button, gray_bg)
-    p.setColor(QPalette.ButtonText, dark)
-    p.setColor(QPalette.PlaceholderText, QColor(120, 120, 120))
-    p.setColor(QPalette.Highlight, QColor(74, 158, 255))
-    p.setColor(QPalette.HighlightedText, white)
-    app.setPalette(p)
+    pixmap = QPixmap(320, 120)
+    pixmap.fill(QColor("#f8f9fa"))
+    splash = QSplashScreen(pixmap)
+    splash.showMessage("⏳ Loading...", Qt.AlignCenter, QColor("#1a1a1a"))
+    splash.show()
+    return splash
 
 
 def main():
     app = QApplication(sys.argv)
-    _apply_light_palette(app)
+    app.setStyle("Fusion")
     app.setApplicationName(APP_NAME)
     app.setOrganizationName("Transcriber")
+    splash = _show_loading_splash()
+    app.processEvents()
 
     # Иконка приложения (если есть файл icon.png/icon.ico рядом)
     import os
@@ -53,6 +45,10 @@ def main():
 
     window = MainWindow()
     window.show()
+    app.processEvents()
+    splash.finish(window)
+    splash.close()
+    splash.deleteLater()
 
     sys.exit(app.exec())
 

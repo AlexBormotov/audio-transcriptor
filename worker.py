@@ -20,20 +20,26 @@ class TranscribeWorker(QThread):
     error = Signal(str)            # сообщение об ошибке
     progress = Signal(str)         # статус-сообщение
 
-    def __init__(self, file_path, model_size, language, output_format):
+    def __init__(self, file_path, model_size, language, output_format,
+                 skip_convert=False):
         super().__init__()
         self.file_path = file_path
         self.model_size = model_size
         self.language = language
         self.output_format = output_format
+        self.skip_convert = skip_convert
 
     def run(self):
         """Основной цикл: конвертация -> транскрипция -> результат."""
         wav_path = None
         try:
-            self.progress.emit("Конвертация аудио в WAV...")
-            # Длинные ролики: без жёсткого таймаута ffmpeg (раньше 300 с могло обрывать конвертацию).
-            wav_path = media_to_wav_16k_mono(self.file_path, timeout=None)
+            if self.skip_convert:
+                # Файл уже в формате WAV 16 kHz моно (например, запись с микрофона)
+                wav_path = self.file_path
+            else:
+                self.progress.emit("Конвертация аудио в WAV...")
+                # Длинные ролики: без жёсткого таймаута ffmpeg (раньше 300 с могло обрывать конвертацию).
+                wav_path = media_to_wav_16k_mono(self.file_path, timeout=None)
 
             self.progress.emit(f"Загрузка модели {self.model_size}...")
 
