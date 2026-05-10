@@ -1,9 +1,12 @@
 """
 Модуль транскрипции аудио/видео файлов.
 
-Использует WhisperLive (faster-whisper backend) для распознавания речи.
+Использует faster-whisper (основной backend) или WhisperLive (fallback)
+для распознавания речи.
 Поддерживает GPU (CUDA) с автоматическим переключением на CPU
 при отсутствии CUDA или необходимых библиотек (cublas, cudnn).
+Режим батчевой обработки (BatchedInferencePipeline) для параллельной
+транскрипции сегментов и полной загрузки GPU.
 """
 
 import os
@@ -13,16 +16,20 @@ import tempfile
 
 import torch
 try:
-    # Основной backend: WhisperLive (по запросу пользователя).
+    # Основной backend: faster-whisper с поддержкой BatchedInferencePipeline
+    from faster_whisper import WhisperModel as BackendWhisperModel
+    from faster_whisper import BatchedInferencePipeline
+    _batched_available = True
+    _backend_name = "faster-whisper"
+    _backend_import_error = None
+except Exception as import_error:
+    # Fallback: WhisperLive (без батчевого инференса)
     from whisper_live.transcriber.transcriber_faster_whisper import (
         WhisperModel as BackendWhisperModel,
     )
-    _backend_name = "whisper-live"
-    _backend_import_error = None
-except Exception as import_error:
-    # Безопасный fallback: если WhisperLive не импортируется, используем faster-whisper напрямую.
-    from faster_whisper import WhisperModel as BackendWhisperModel
-    _backend_name = "faster-whisper"
+    BatchedInferencePipeline = None
+    _batched_available = False
+    _backend_name = "whisper-live (legacy)"
     _backend_import_error = import_error
 
 
@@ -149,6 +156,7 @@ def media_to_wav_16k_mono(input_path, timeout=None):
     wav_path = tempfile.mktemp(suffix=".wav")
     cmd = [
         "ffmpeg", "-i", input_path,
+        "-threads", "0",
         "-vn", "-acodec", "pcm_s16le",
         "-ar", "16000", "-ac", "1",
         "-y", wav_path,
@@ -187,6 +195,32 @@ def format_timestamp(seconds):
     secs = int(seconds % 60)
     millis = int((seconds % 1) * 1000)
     return f"{hours:02d}:{minutes:02d}:{secs:02d}.{millis:03d}"
+
+
+def _format_segments(segments, info, output_format):
+    """Форматирует сегменты Whisper в текст (plain или timestamps).
+
+    Returns:
+        tuple: (formatted_text, lang_info_dict)
+    """
+    if output_format == "timestamps":
+        lines = []
+        for segment in segments:
+            start = format_timestamp(segment.start)
+            end = format_timestamp(segment.end)
+            lines.append(f"[{start} --> {end}] {segment.text.strip()}")
+        result = "\n".join(lines)
+    else:
+        texts = []
+        for segment in segments:
+            texts.append(segment.text.strip())
+        result = " ".join(texts)
+
+    lang_info = {
+        "language": info.language,
+        "probability": info.language_probability,
+    }
+    return result, lang_info
 
 
 def transcribe_file(file_path, model_size="base", language=None,
@@ -235,24 +269,74 @@ def transcribe_file(file_path, model_size="base", language=None,
             )
         raise
 
-    if output_format == "timestamps":
-        lines = []
-        for segment in segments:
-            start = format_timestamp(segment.start)
-            end = format_timestamp(segment.end)
-            lines.append(f"[{start} --> {end}] {segment.text.strip()}")
-        result = "\n".join(lines)
-    else:
-        texts = []
-        for segment in segments:
-            texts.append(segment.text.strip())
-        result = " ".join(texts)
-
-    lang_info = {
-        "language": info.language,
-        "probability": info.language_probability,
-    }
+    result, lang_info = _format_segments(segments, info, output_format)
     return result, lang_info
+
+
+def transcribe_file_batched(file_path, model_size="base", language=None,
+                            output_format="plain", force_cpu=False,
+                            batch_size=16):
+    """Транскрибирует аудио/видео файл с батчевой параллельной обработкой.
+
+    Использует BatchedInferencePipeline для параллельной обработки сегментов
+    через VAD + batch inference. Значительно быстрее на GPU за счёт утилизации
+    всех ядер CUDA.
+
+    Args:
+        file_path: путь к аудио/видео файлу
+        model_size: размер модели Whisper (tiny, base, small, medium, large-v3)
+        language: код языка ("ru", "en" и т.д.) или None для автоопределения
+        output_format: "plain" — сплошной текст, "timestamps" — с таймкодами
+        force_cpu: не использовать GPU
+        batch_size: число сегментов, обрабатываемых параллельно.
+                    Рекомендация: 16 для GPU, 4-8 для CPU.
+
+    Returns:
+        tuple: (текст транскрипции, dict с информацией о языке)
+    """
+    global _active_device, _active_compute
+
+    if not _batched_available:
+        print("[WARN] BatchedInferencePipeline недоступен, использую обычный режим.")
+        print("[WARN] Для батчевого режима установите faster-whisper>=1.0.0")
+        return transcribe_file(file_path, model_size, language, output_format, force_cpu)
+
+    model = get_model(model_size, force_cpu=force_cpu)
+    batched_model = BatchedInferencePipeline(model=model)
+
+    kwargs = {
+        "batch_size": batch_size,
+        "vad_filter": True,
+        "vad_parameters": dict(
+            min_silence_duration_ms=500,
+            max_speech_duration_s=30,
+            speech_pad_ms=400,
+        ),
+        "beam_size": 5,
+        "condition_on_previous_text": False,
+        "no_speech_threshold": 0.3,
+    }
+    if language and language != "auto":
+        kwargs["language"] = language
+
+    try:
+        segments, info = batched_model.transcribe(file_path, **kwargs)
+    except Exception as e:
+        if not force_cpu and _should_retry_on_cpu(e):
+            print(
+                "[WARN] Ошибка GPU при распознавании; повтор на CPU…",
+                file=sys.stderr,
+            )
+            _model_cache.pop((model_size, False), None)
+            _active_device = None
+            _active_compute = None
+            return transcribe_file_batched(
+                file_path, model_size, language, output_format, force_cpu=True,
+                batch_size=batch_size,
+            )
+        raise
+
+    return _format_segments(segments, info, output_format)
 
 
 if __name__ == "__main__":
@@ -291,6 +375,17 @@ if __name__ == "__main__":
         action="store_true",
         help="Только CPU (если CUDA/cuBLAS на машине сломаны)",
     )
+    parser.add_argument(
+        "--batched",
+        action="store_true",
+        help="Батчевая параллельная обработка (BatchedInferencePipeline)",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=16,
+        help="Размер батча для параллельной обработки (по умолчанию 16)",
+    )
     args = parser.parse_args()
 
     if not os.path.isfile(args.file):
@@ -305,9 +400,15 @@ if __name__ == "__main__":
         print("[INFO] ffmpeg: извлечение аудио в WAV 16 kHz…")
         wav_path = media_to_wav_16k_mono(args.file)
         print("[INFO] Транскрипция…")
-        text, lang_info = transcribe_file(
-            wav_path, args.model, lang, fmt, force_cpu=args.cpu,
-        )
+        if args.batched:
+            text, lang_info = transcribe_file_batched(
+                wav_path, args.model, lang, fmt, force_cpu=args.cpu,
+                batch_size=args.batch_size,
+            )
+        else:
+            text, lang_info = transcribe_file(
+                wav_path, args.model, lang, fmt, force_cpu=args.cpu,
+            )
     except Exception as err:
         print(f"[ОШИБКА] {err}", file=sys.stderr)
         sys.exit(1)
