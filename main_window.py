@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QLabel, QFileDialog, QProgressBar,
     QButtonGroup, QGroupBox, QMessageBox, QApplication,
     QStackedWidget, QSystemTrayIcon, QMenu,
+    QSpinBox,
 )
 from PySide6.QtCore import Qt, Signal, QTimer, QSettings
 from PySide6.QtGui import (
@@ -193,6 +194,18 @@ class MainWindow(QMainWindow):
         self.lang_combo.addItems(LANGUAGES.keys())
         layout.addWidget(self.lang_combo)
 
+        # --- batch_size ---
+        batch_layout = QHBoxLayout()
+        batch_label = QLabel("Параллельных сегментов (batch_size):")
+        self.batch_spin = QSpinBox()
+        self.batch_spin.setRange(1, 32)
+        self.batch_spin.setValue(16)
+        self.batch_spin.setToolTip("Больше — выше нагрузка на GPU/CPU, но быстрее транскрипция")
+        batch_layout.addWidget(batch_label)
+        batch_layout.addWidget(self.batch_spin)
+        batch_layout.addStretch()
+        layout.addLayout(batch_layout)
+
         fmt_box = QGroupBox("Формат вывода")
         fmt_layout = QVBoxLayout()
         self.fmt_plain = QRadioButton("Сплошной текст")
@@ -311,6 +324,11 @@ class MainWindow(QMainWindow):
         badge = "🟢 GPU (CUDA)" if device == "cuda" else "🟡 CPU"
         self.status_label = QLabel(f"{badge} ({compute}) | {backend} | Готово")
         self.statusBar().addPermanentWidget(self.status_label)
+
+        device_text = f"Устройство: {device.upper()} ({compute})"
+        self.device_label = QLabel(device_text)
+        self.device_label.setStyleSheet("color: #666; font-size: 11px; padding-right: 12px;")
+        self.statusBar().addPermanentWidget(self.device_label)
 
     # ------------------------------------------------------------------ Системный трей
 
@@ -689,6 +707,7 @@ class MainWindow(QMainWindow):
         self.worker = TranscribeWorker(
             path, self.model_combo.currentText(), lang_code, fmt,
             skip_convert=skip_convert,
+            batch_size=self.batch_spin.value(),
         )
         self.worker.progress.connect(self._on_progress)
         self.worker.finished.connect(self._on_finished)
@@ -716,6 +735,7 @@ class MainWindow(QMainWindow):
         self.status_label.setText(
             f"{badge} ({compute}) | Язык: {detected} ({prob:.0%}) | Готово"
         )
+        self.device_label.setText(f"Устройство: {device.upper()} ({compute})")
 
     def _on_error(self, error_msg):
         """Обработка ошибки транскрипции."""

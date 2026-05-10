@@ -10,11 +10,11 @@ import tempfile
 
 import gradio as gr
 
-from transcriber import transcribe_file, get_backend_info, get_device_info, media_to_wav_16k_mono
+from transcriber import transcribe_file, transcribe_file_batched, get_backend_info, get_device_info, media_to_wav_16k_mono
 from constants import MODEL_SIZES, LANGUAGES
 
 
-def process_file(file_path, model_size, language_name, output_format_name):
+def process_file(file_path, model_size, language_name, output_format_name, batch_size=16):
     """Обрабатывает загруженный файл и возвращает транскрипцию.
 
     Args:
@@ -39,8 +39,9 @@ def process_file(file_path, model_size, language_name, output_format_name):
     fmt = "timestamps" if output_format_name == "С таймкодами" else "plain"
 
     try:
-        text, lang_info = transcribe_file(
-            wav_path, model_size, lang_code, fmt
+        text, lang_info = transcribe_file_batched(
+            wav_path, model_size, lang_code, fmt,
+            batch_size=int(batch_size),
         )
     finally:
         if os.path.exists(wav_path):
@@ -70,6 +71,7 @@ def process_file(file_path, model_size, language_name, output_format_name):
     info_text = (
         f"Язык: {detected} ({prob:.0%}) | "
         f"Устройство: {actual_device.upper()} ({actual_compute}) | "
+        f"Batch: {batch_size} | "
         f"Backend: {backend_label} | "
         f"Модель: {model_size}"
     )
@@ -122,6 +124,14 @@ def build_ui():
                     value="Сплошной текст",
                     label="Формат вывода",
                 )
+                batch_size = gr.Slider(
+                    minimum=1,
+                    maximum=32,
+                    value=16,
+                    step=1,
+                    label="Параллельных сегментов (batch_size)",
+                    info="Больше = быстрее, но выше нагрузка на GPU/CPU",
+                )
                 transcribe_btn = gr.Button(
                     "▶ Транскрибировать",
                     variant="primary",
@@ -146,7 +156,7 @@ def build_ui():
 
         transcribe_btn.click(
             fn=process_file,
-            inputs=[file_input, model_size, language, output_format],
+            inputs=[file_input, model_size, language, output_format, batch_size],
             outputs=[output_text, download_file, info_label],
         )
 
